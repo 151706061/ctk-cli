@@ -117,8 +117,7 @@ class CLIModule(list):
         options = []
         outputs = []
         for parameter in self.parameters():
-            if parameter.channel == 'output' and not (
-                    parameter.isExternalType() or parameter.typ == 'file'):
+            if parameter.channel == 'output' and not parameter.isExternalType():
                 outputs.append(parameter)
             elif parameter.index is not None:
                 arguments.append(parameter)
@@ -176,7 +175,8 @@ class CLIParameter(object):
         'string', 'directory',
         'integer-vector', 'float-vector', 'double-vector',
         'string-vector',
-        'integer-enumeration', 'float-enumeration', 'double-enumeration', 'string-enumeration',
+        'integer-enumeration', 'float-enumeration', 'double-enumeration',
+        'string-enumeration',
         'point', 'region',
         'file',
     )
@@ -198,11 +198,12 @@ class CLIParameter(object):
         'integer' : int,
         'float' : float,
         'double' : float,
+        'string' : str
     }
 
     REQUIRED_ELEMENTS = ('name', 'description', 'label')
 
-    OPTIONAL_ELEMENTS = (# either 'flag' or 'longflag' (or both) or 'index' are required
+    OPTIONAL_ELEMENTS = (# either 'index' or at least one of 'flag' or 'longflag' is required
                          'flag', 'longflag', 'index',
                          'default', 'channel')
     
@@ -230,7 +231,7 @@ class CLIParameter(object):
 
     def parseValue(self, value):
         """Parse the given value and return result."""
-        if self.isNumericVector():
+        if self.isVector():
             return map(self._pythonType, value.split(','))
         if self.typ == 'boolean':
             return _parseBool(value)
@@ -238,6 +239,14 @@ class CLIParameter(object):
 
     def isOptional(self):
         return self.index is None
+
+    def isVector(self):
+        """Return whether this is a vector-like type with multiple
+        elements of a numeric or string type.  This includes the
+        xxx-vector types as well as point (fixed 3D) and region (fixed
+        6D).  For these, the value will be a sequence of the
+        corresponding python type."""
+        return self.isNumericVector() or self.typ == 'string-vector'
 
     def isNumericVector(self):
         """Return whether this is a vector-like type with multiple
@@ -248,8 +257,9 @@ class CLIParameter(object):
         return (self.typ.endswith('-vector') and self.typ != 'string-vector') or self.typ in ('point', 'region')
 
     def isExternalType(self):
-        """Return True iff parameter values of this type are transferred via (temporary) files"""
-        return self.typ in self.EXTERNAL_TYPES
+        """Return True iff values of this type are file paths"""
+        return (self.typ in self.EXTERNAL_TYPES or
+                self.typ in ['file', 'directory'])
 
     def defaultExtension(self):
         """Return default extension for this parameter type, checked
